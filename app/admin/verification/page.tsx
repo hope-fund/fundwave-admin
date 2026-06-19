@@ -4,9 +4,9 @@ import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 
-// Axios setup pointing to your deployed FastAPI backend
+// Direct connection engine pointing to your live Render FastAPI deployment
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: 'https://fundwave-bd.onrender.com/api/v1',
   headers: {
     'Content-Type': 'application/json',
   }
@@ -14,7 +14,7 @@ const api = axios.create({
 
 // Add JWT token to requests dynamically
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -35,7 +35,7 @@ interface PendingDonation {
 export default function VerificationPage() {
   const queryClient = useQueryClient()
 
-  // 1. Fetching the current pending verification queue
+  // 1. Fetching the current pending verification queue from Render
   const { data: pendingDonations, isLoading, error } = useQuery<PendingDonation[]>({
     queryKey: ['pending-donations'],
     queryFn: async () => {
@@ -50,7 +50,6 @@ export default function VerificationPage() {
       return await api.post(`/admin/donations/${donationId}/verify`)
     },
     onSuccess: () => {
-      // Invalidate and refresh the list automatically without a page reload
       queryClient.invalidateQueries({ queryKey: ['pending-donations'] })
     },
     onError: (err: any) => {
@@ -71,8 +70,27 @@ export default function VerificationPage() {
     }
   })
 
-  if (isLoading) return <div className="text-gray-400 p-8 font-mono">Querying database transaction log...</div>
-  if (error) return <div className="text-red-400 p-8 font-mono">Engine synchronization error. Check API connection.</div>
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh] text-gray-400 font-mono text-sm animate-pulse">
+        🔄 Querying Render live database transaction log...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-950/20 border border-red-900/50 rounded-xl max-w-2xl mx-auto mt-8 font-mono">
+        <h3 className="text-red-400 font-bold text-lg mb-2">🛑 Engine Synchronization Error</h3>
+        <p className="text-gray-400 text-sm leading-relaxed mb-4">
+          The admin console failed to establish a handshake with the Render server at <code className="bg-black/30 px-1 py-0.5 rounded text-red-300">https://fundwave-bd.onrender.com</code>.
+        </p>
+        <div className="text-xs text-gray-500 border-t border-red-900/30 pt-3">
+          Possible cause: Your Render FastAPI backend might be blocking this request due to missing CORS origins for your Codespace domain.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
