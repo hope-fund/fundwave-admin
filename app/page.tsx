@@ -1,77 +1,66 @@
-"use client";
-
-import { useState } from "react";
-import { AuthService } from "../services/auth.service";
+"useinit";
+import React, { useState } from 'react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const response = await AuthService.login(email, password);
-      const { token } = response.data;
-      localStorage.setItem("token", token);
-      window.location.href = "/dashboard"; 
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid email or password");
-    } finally {
-      setLoading(false);
-    }
+    console.log({ email, password });
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-            Sign in to Fundwave Admin
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
+      <div className="w-full max-w-md space-y-8 bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-700">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">
+            Fundwave Admin
           </h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Sign in to manage your platform
+          </p>
         </div>
+        
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-          <div className="-space-y-px rounded-md shadow-sm">
+          <div className="space-y-4">
             <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+                Email address
+              </label>
               <input
+                id="email"
                 type="email"
                 required
-                className="relative block w-full rounded-t-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                placeholder="Email address"
+                className="mt-1 block w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="admin@fundwave.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+
             <div>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+                Password
+              </label>
               <input
+                id="password"
                 type="password"
                 required
-                className="relative block w-full rounded-b-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                placeholder="Password"
+                className="mt-1 block w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 transition font-semibold"
+          >
+            Sign In
+          </button>
         </form>
       </div>
     </div>
