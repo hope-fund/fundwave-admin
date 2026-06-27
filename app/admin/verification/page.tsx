@@ -1,159 +1,206 @@
-'use client'
+"use client";
 
-import React from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 
-// Direct connection engine pointing to your live Render FastAPI deployment
 const api = axios.create({
-  baseURL: 'https://fundwave-bd.onrender.com/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  }
-})
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://fundwave-bd.onrender.com",
+});
 
-// Add JWT token to requests dynamically
 api.interceptors.request.use((config) => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return config
-})
+  return config;
+});
 
-interface PendingDonation {
-  id: string
-  sender_name: string
-  sender_email: string
-  amount: number
-  currency: string
-  campaign_title: string
-  proof_of_payment_url: string
-  created_at: string
+interface Donation {
+  id: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  sender_account_name: string | null;
+  sender_bank_name: string | null;
+  proof_file_url: string | null;
+  status: string;
+  created_at: string;
+  campaign_id: string;
 }
 
 export default function VerificationPage() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
+  const [rejectReason, setRejectReason] = useState("");
+  const [selectedDonation, setSelectedDonation] = useState<string | null>(null);
 
-  // 1. Fetching the current pending verification queue from Render
-  const { data: pendingDonations, isLoading, error } = useQuery<PendingDonation[]>({
-    queryKey: ['pending-donations'],
+  const { data: donations, isLoading, error } = useQuery({
+    queryKey: ["pending-donations"],
     queryFn: async () => {
-      const res = await api.get('/admin/donations/pending')
-      return res.data
-    }
-  })
+      const res = await api.get("/admin/donations/pending");
+      return res.data as Donation[];
+    },
+    refetchInterval: 10000,
+  });
 
-  // 2. The Verification Action: Writes Ledger Entry, Modifies Balance, Logs Event
   const verifyMutation = useMutation({
-    mutationFn: async (donationId: string) => {
-      return await api.post(`/admin/donations/${donationId}/verify`)
+    mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
+      const res = await api.post(`/admin/donations/${id}/verify`, {
+        status,
+        rejection_reason: reason,
+      });
+      return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pending-donations'] })
+      queryClient.invalidateQueries({ queryKey: ["pending-donations"] });
+      setSelectedDonation(null);
+      setRejectReason("");
     },
-    onError: (err: any) => {
-      alert(`Ledger Write Rejected: ${err.response?.data?.detail || err.message}`)
-    }
-  })
-
-  // 3. The Rejection Action: Drops Transaction, Writes Audit Event Only
-  const rejectMutation = useMutation({
-    mutationFn: async (donationId: string) => {
-      return await api.post(`/admin/donations/${donationId}/reject`)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pending-donations'] })
-    },
-    onError: (err: any) => {
-      alert(`Rejection Action Failed: ${err.message}`)
-    }
-  })
+  });
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-gray-400 font-mono text-sm animate-pulse">
-        🔄 Querying Render live database transaction log...
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
-      <div className="p-6 bg-red-950/20 border border-red-900/50 rounded-xl max-w-2xl mx-auto mt-8 font-mono">
-        <h3 className="text-red-400 font-bold text-lg mb-2">🛑 Engine Synchronization Error</h3>
-        <p className="text-gray-400 text-sm leading-relaxed mb-4">
-          The admin console failed to establish a handshake with the Render server at <code className="bg-black/30 px-1 py-0.5 rounded text-red-300">https://fundwave-bd.onrender.com</code>.
-        </p>
-        <div className="text-xs text-gray-500 border-t border-red-900/30 pt-3">
-          Possible cause: Your Render FastAPI backend might be blocking this request due to missing CORS origins for your Codespace domain.
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h2 className="text-red-800 text-lg font-semibold mb-2">Engine Synchronization Error</h2>
+          <p className="text-red-600">
+            {error instanceof Error ? error.message : "Failed to load pending donations"}
+          </p>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["pending-donations"] })}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-800 pb-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Donation Verification Engine</h2>
-          <p className="text-sm text-gray-400 mt-1">Manual reconciliation processing queue. Actions directly mutate the financial ledger.</p>
-        </div>
-        <div className="mt-4 md:mt-0 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded text-xs font-mono">
-          ⚠️ {pendingDonations?.length || 0} Transactions Awaiting Authorization
-        </div>
+    <div className="p-8 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Donation Verification</h1>
+      
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sender</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proof</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {donations?.map((donation) => (
+              <tr key={donation.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                  {donation.id.slice(0, 8)}...
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {donation.amount} {donation.currency}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {donation.payment_method}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {donation.sender_account_name || "N/A"}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {donation.proof_file_url ? (
+                    <a
+                      href={donation.proof_file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      View Proof
+                    </a>
+                  ) : (
+                    <span className="text-red-500">Missing</span>
+                  )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {new Date(donation.created_at).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                  {selectedDonation === donation.id ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Rejection reason (optional for approve)"
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                      <div className="space-x-2">
+                        <button
+                          onClick={() =>
+                            verifyMutation.mutate({
+                              id: donation.id,
+                              status: "confirmed",
+                            })
+                          }
+                          disabled={verifyMutation.isPending}
+                          className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() =>
+                            verifyMutation.mutate({
+                              id: donation.id,
+                              status: "rejected",
+                              reason: rejectReason,
+                            })
+                          }
+                          disabled={verifyMutation.isPending || !rejectReason}
+                          className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedDonation(null);
+                            setRejectReason("");
+                          }}
+                          className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedDonation(donation.id)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                    >
+                      Review
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        {donations?.length === 0 && (
+          <div className="p-8 text-center text-gray-500">
+            No pending donations to verify.
+          </div>
+        )}
       </div>
-
-      {pendingDonations?.length === 0 ? (
-        <div className="text-center py-12 bg-[#0F1422] rounded-xl border border-gray-800 text-gray-500 font-mono">
-          ✓ Reconciliation complete. Queue is clear.
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {pendingDonations?.map((tx) => (
-            <div key={tx.id} className="bg-[#0F1422] border border-gray-800 rounded-xl p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-mono bg-gray-800 px-2 py-0.5 rounded text-gray-400">{tx.id}</span>
-                  <span className="text-sm text-gray-500">{new Date(tx.created_at).toLocaleString()}</span>
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-white">
-                    {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.currency}
-                  </h4>
-                  <p className="text-sm text-gray-300">Declared by <span className="font-semibold text-white">{tx.sender_name}</span> ({tx.sender_email})</p>
-                  <p className="text-xs text-gray-400 mt-1">Target Account: <span className="text-blue-400 font-medium">{tx.campaign_title}</span></p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 lg:self-center self-end">
-                <a 
-                  href={tx.proof_of_payment_url} 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium rounded-lg border border-gray-700 transition"
-                >
-                  Review Proof
-                </a>
-                <button 
-                  onClick={() => verifyMutation.mutate(tx.id)}
-                  disabled={verifyMutation.isPending || rejectMutation.isPending}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-emerald-900/20"
-                >
-                  {verifyMutation.isPending ? 'Writing Entry...' : 'Verify & Write Entry'}
-                </button>
-                <button 
-                  onClick={() => rejectMutation.mutate(tx.id)}
-                  disabled={verifyMutation.isPending || rejectMutation.isPending}
-                  className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 disabled:opacity-50 text-red-400 text-sm font-medium rounded-lg border border-red-500/10 transition"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
-  )
+  );
 }
