@@ -1,21 +1,25 @@
-import './globals.css'
-import Providers from './providers'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import Providers from "./providers";
 
-export const metadata = {
-  title: 'Fundwave Admin Operations',
-  description: 'Ledger Engine Control Console',
-}
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "Fundwave Admin",
+  description: "Admin dashboard for Fundwave",
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className="bg-[#0B0F19]">
+      <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>
     </html>
-  )
+  );
 }
