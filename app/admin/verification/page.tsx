@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";  // ← Use shared API client
+import { api } from "@/services/api";
 
 interface Donation {
   id: string;
@@ -22,11 +22,26 @@ export default function VerificationPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [selectedDonation, setSelectedDonation] = useState<string | null>(null);
 
+  // TEMPORARY DEBUG — remove after fixing
+  const [debugInfo, setDebugInfo] = useState<string>("Loading...");
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "not set";
+    setDebugInfo(`Token: ${token ? "present (" + token.slice(0, 20) + "...)" : "MISSING"} | BaseURL: ${baseUrl}`);
+  }, []);
+
   const { data: donations, isLoading, error } = useQuery({
     queryKey: ["pending-donations"],
     queryFn: async () => {
-      const res = await api.get("/admin/donations/pending");
-      return res.data as Donation[];
+      try {
+        const res = await api.get("/admin/donations/pending");
+        console.log("API SUCCESS:", res.status, res.data);
+        return res.data as Donation[];
+      } catch (err: any) {
+        console.error("API ERROR:", err.response?.status, err.response?.data, err.message);
+        throw err;
+      }
     },
     refetchInterval: 10000,
   });
@@ -57,6 +72,11 @@ export default function VerificationPage() {
   if (error) {
     return (
       <div className="p-8">
+        {/* TEMPORARY DEBUG — remove after fixing */}
+        <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded text-sm font-mono">
+          <p><strong>Debug:</strong> {debugInfo}</p>
+          <p><strong>API URL:</strong> {process.env.NEXT_PUBLIC_API_URL || "not set"}/admin/donations/pending</p>
+        </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <h2 className="text-red-800 text-lg font-semibold mb-2">Engine Synchronization Error</h2>
           <p className="text-red-600">
@@ -76,7 +96,14 @@ export default function VerificationPage() {
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Donation Verification</h1>
-      
+
+      {/* TEMPORARY DEBUG — remove after fixing */}
+      <div className="mb-4 p-4 bg-green-100 border border-green-400 rounded text-sm font-mono">
+        <p><strong>Debug:</strong> {debugInfo}</p>
+        <p><strong>API URL:</strong> {process.env.NEXT_PUBLIC_API_URL || "not set"}/admin/donations/pending</p>
+        <p><strong>Donations loaded:</strong> {donations?.length ?? 0}</p>
+      </div>
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -182,7 +209,7 @@ export default function VerificationPage() {
             ))}
           </tbody>
         </table>
-        
+
         {donations?.length === 0 && (
           <div className="p-8 text-center text-gray-500">
             No pending donations to verify.
