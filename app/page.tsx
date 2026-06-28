@@ -2,11 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://fundwave-bd.onrender.com",
-});
+import { AuthService } from "@/services/Auth.service";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,21 +17,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await api.post("/auth/login", {
-        email,
-        password,
-      });
+      const res = await AuthService.login(email, password);
+      const { access_token } = res.data;
 
-      const { access_token, token_type } = res.data;
-
-      // Store token
       localStorage.setItem("token", access_token);
-
-      // Redirect to admin dashboard
-      router.push("/admin/dashboard");
+      router.push("/admin/verification");
     } catch (err: any) {
       setError(
-        err.response?.data?.detail || "Invalid email or password"
+        err.response?.data?.detail || err.message || "Invalid email or password"
       );
     } finally {
       setLoading(false);
