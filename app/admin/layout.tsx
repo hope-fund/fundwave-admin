@@ -1,72 +1,48 @@
-'use client'
+"use client";
 
-import React, { useState } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { AuthService } from "@/services/Auth.service";
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const pathname = usePathname()
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
 
-  const [queryClient] = useState(() => new QueryClient())
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/");
+      return;
+    }
 
-  const navigation = [
-    {
-      name: 'Verification Queue',
-      href: '/admin/verification',
-      icon: '🧾',
-    },
-    {
-      name: 'System Core Logs',
-      href: '/admin/logs',
-      icon: '📜',
-    },
-  ]
+    AuthService.me()
+      .then((res) => {
+        if (res.data.role !== "admin") {
+          router.push("/");
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        router.push("/");
+      });
+  }, [router]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col md:flex-row">
-        <aside className="w-full md:w-64 bg-[#0F1422] border-b md:border-b-0 md:border-r border-gray-800 p-5 shrink-0">
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-lg">
-              F
-            </div>
-
-            <span className="text-lg font-bold tracking-tight">
-              Fundwave Ops
-            </span>
-          </div>
-
-          <nav className="space-y-1">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href
-
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                    isActive
-                      ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20'
-                      : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 border border-transparent'
-                  }`}
-                >
-                  <span>{item.icon}</span>
-                  <span>{item.name}</span>
-                </Link>
-              )
-            })}
-          </nav>
-        </aside>
-
-        <main className="flex-1 p-6 md:p-10 max-w-7xl w-full mx-auto">
-          {children}
-        </main>
-      </div>
-    </QueryClientProvider>
-  )
+    <div className="min-h-screen bg-slate-50">
+      <nav className="bg-slate-900 text-white px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <h1 className="text-lg font-semibold">Fundwave Admin</h1>
+          <button
+            onClick={() => {
+              localStorage.removeItem("token");
+              router.push("/");
+            }}
+            className="text-sm text-slate-300 hover:text-white"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+      <main>{children}</main>
+    </div>
+  );
 }
